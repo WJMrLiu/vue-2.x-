@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Document</title>
+  </head>
+  <body>
+    <div>
+      <input type="text" />
+    </div>
+
+    <script>
+      console.log(document.getElementsByTagName("div"));
+    </script>
+
+    <script>
+      // 递归函数： 不断的重复调用自己， 形成一个循环的过程 ， 这个过程就叫递归
+
+      let arr = [1, 3, 5, 7, 9];
+      function sumCount(arr) {
+        let i = 0;
+        function digui(n) {
+          if (n >= arr.length) {
+            return;
+          }
+          i += arr[n];
+          digui(n + 1);
+        }
+        digui(i);
+        return i;
+      }
+      let restult2 = sumCount(arr);
+      console.log("递归求和", restult2);
+    </script>
+
+    <script>
+      function Watcher(vm, expOrFn) {
+        this.vm = vm;
+
+        // 保存传入的更新函数
+
+        this.getter = expOrFn;
+
+        // 新建 watcher 的时候，立即执行更新函数
+
+        this.get();
+      }
+
+      Watcher.prototype.get = function() {
+        // 执行更新函数
+        this.getter.call(this.vm, this.vm);
+      };
+
+      Watcher.prototype.update = function() {
+        this.get();
+      };
+    </script>
+  </body>
+</html>
