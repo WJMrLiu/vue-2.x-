@@ -2677,8 +2677,7 @@
         res && typeof res === "object" && !Array.isArray(res)
           ? [res] // single vnode
           : normalizeChildren(res);
-      return res &&
-        (res.length === 0 || (res.length === 1 && res[0].isComment)) // #9658
+      return res && (res.length === 0 || (res.length === 1 && res[0].isComment)) // #9658
         ? undefined
         : res;
     };
@@ -4524,6 +4523,9 @@
    * A watcher parses an expression, collects dependencies,
    * and fires callback when the expression value changes.
    * This is used for both the $watch() api and directives.
+   * 保存 computed 计算函数
+   * 保存计算结果
+   * 控制缓存计算结果是否有效
    */
   var Watcher = function Watcher(vm, expOrFn, cb, options, isRenderWatcher) {
     this.vm = vm;
@@ -4572,12 +4574,14 @@
 
   /**
    * Evaluate the getter, and re-collect dependencies.
+   * 计算 value的值 还是这个 watcher.get 这个方法
    */
   Watcher.prototype.get = function get() {
     pushTarget(this);
     var value;
     var vm = this.vm;
     try {
+      // getter 就是 watcher 回调
       value = this.getter.call(vm, vm);
     } catch (e) {
       if (this.user) {
@@ -4688,6 +4692,7 @@
    */
   Watcher.prototype.evaluate = function evaluate() {
     this.value = this.get();
+    // 执行完更新函数之后，立即重置标志位
     this.dirty = false;
   };
 
@@ -4754,7 +4759,7 @@
       observe((vm._data = {}), true /* asRootData */);
     }
     if (opts.computed) {
-      initComputed(vm, opts.computed);
+      initComputed(vm, opts.computed); // 这是处理 computed 的方法
     }
     if (opts.watch && opts.watch !== nativeWatch) {
       initWatch(vm, opts.watch);
@@ -4888,6 +4893,8 @@
 
       if (!isSSR) {
         // create internal watcher for the computed property.
+        // 每个 computed 都创建一个 watcher
+        // watcher 用来存储计算值， 判断是否需要重新计算
         watchers[key] = new Watcher(
           vm,
           getter || noop,
@@ -4899,6 +4906,7 @@
       // component-defined computed properties are already defined on the
       // component prototype. We only need to define computed properties defined
       // at instantiation here.
+      // 判断是否有重名的属性
       if (!(key in vm)) {
         defineComputed(vm, key, userDef);
       } else {
@@ -4942,16 +4950,20 @@
         );
       };
     }
-    Object.defineProperty(target, key, sharedPropertyDefinition);
+    Object.defineProperty(target, key, sharedPropertyDefinition); // 在一个对象上定义一个新属性
   }
 
   function createComputedGetter(key) {
     return function computedGetter() {
+       // 获取到相应 key 的 computed-watcher
       var watcher = this._computedWatchers && this._computedWatchers[key];
+       // 如果 computed 依赖的数据变化，dirty 会变成true，  从而重新计算，然后更新缓存值 watcher.value
       if (watcher) {
         if (watcher.dirty) {
+          // 下面这段代码作用就是缓存控制
           watcher.evaluate();
         }
+         // 这里是 月老computed 牵线的重点，让双方建立关系
         if (Dep.target) {
           watcher.depend();
         }
@@ -9694,8 +9706,9 @@
       last = html;
       // Make sure we're not in a plaintext content element like script/style
       if (!lastTag || !isPlainTextElement(lastTag)) {
-        var textEnd = html.indexOf("<");  // 寻找 < 的起始位置
-        if (textEnd === 0) { // 模板起始位置是标签开头
+        var textEnd = html.indexOf("<"); // 寻找 < 的起始位置
+        if (textEnd === 0) {
+          // 模板起始位置是标签开头
           // Comment:
           if (comment.test(html)) {
             var commentEnd = html.indexOf("-->");
@@ -9730,9 +9743,9 @@
             continue;
           }
 
-          // End tag: 
+          // End tag:
           /**
-           * 如果是尾标签的 < 
+           * 如果是尾标签的 <
            * 比如 html = '</div>' , 匹配出 endTagMatch = ["</div>", "div"]
            */
           var endTagMatch = html.match(endTag);
@@ -9757,9 +9770,9 @@
         var text = void 0,
           rest = void 0,
           next = void 0;
-          /**
-           * 模板起始位置不是 < , 而是文字的情况 类似于后面这种请template: "我是构造函数创建：自身参数：{{a}}",
-           */
+        /**
+         * 模板起始位置不是 < , 而是文字的情况 类似于后面这种请template: "我是构造函数创建：自身参数：{{a}}",
+         */
         if (textEnd >= 0) {
           rest = html.slice(textEnd);
           while (
@@ -9838,8 +9851,9 @@
       html = html.substring(n);
     }
 
-    function parseStartTag() { // 用来匹配首标签， 并把首标签信息传给 start 处理
-      var start = html.match(startTagOpen); // match 返回值是数组或者是 null 
+    function parseStartTag() {
+      // 用来匹配首标签， 并把首标签信息传给 start 处理
+      var start = html.match(startTagOpen); // match 返回值是数组或者是 null
       if (start) {
         var match = {
           tagName: start[1],
@@ -10021,7 +10035,8 @@
   /**
    * Convert HTML string to AST.
    */
-  function parse(template, options) { // 该函数的主要作用是把 template 字符串模板 ， 转成 ast
+  function parse(template, options) {
+    // 该函数的主要作用是把 template 字符串模板 ， 转成 ast
     warn$2 = options.warn || baseWarn;
 
     platformIsPreTag = options.isPreTag || no;
@@ -10163,7 +10178,8 @@
       shouldDecodeNewlinesForHref: options.shouldDecodeNewlinesForHref,
       shouldKeepComment: options.comments,
       outputSourceRange: options.outputSourceRange,
-      start: function start(tag, attrs, unary, start$1, end) { // 每当 parseHTML 匹配到一个 首标签，都会把该标签的信息传给 start 方法，让他来处理
+      start: function start(tag, attrs, unary, start$1, end) {
+        // 每当 parseHTML 匹配到一个 首标签，都会把该标签的信息传给 start 方法，让他来处理
         // check namespace.
         // inherit parent ns if there is one
         var ns =
@@ -10249,7 +10265,7 @@
             checkRootConstraints(root);
           }
         }
-        // 不是单标签（input , img 那些)， 就需要保存 stack 
+        // 不是单标签（input , img 那些)， 就需要保存 stack
         if (!unary) {
           currentParent = element;
           stack.push(element);
@@ -10272,8 +10288,8 @@
       /**
        * 当 parseHTML 去匹配 < 的时候，发现 template 不是 <，template开头 到 < 还有一段距离
        * 那么这段距离的内容就是 文本了，那么就会把这段文本传给 chars 方法处理
-      */
-      chars: function chars(text, start, end) { 
+       */
+      chars: function chars(text, start, end) {
         // 必须存在根节点，不可能用文字开头
         if (!currentParent) {
           {
@@ -10333,7 +10349,7 @@
               tokens: res.tokens,
               text: text
             };
-          // 普通字符串，直接存为 字符串子节点
+            // 普通字符串，直接存为 字符串子节点
           } else if (
             text !== " " ||
             !children.length ||
@@ -10366,7 +10382,7 @@
             child.start = start;
             child.end = end;
           }
-          currentParent.children.push(child); 
+          currentParent.children.push(child);
         }
       }
     });
@@ -11138,7 +11154,7 @@
       }
       for (var i = 0, l = node.children.length; i < l; i++) {
         var child = node.children[i];
-        markStatic$1(child);
+        markStatic$1(child); // 递归遍历子节点再调用子节点
         if (!child.static) {
           node.static = false;
         }
@@ -11154,7 +11170,7 @@
       }
     }
   }
-
+  // 标记根节点是否是静态节点
   function markStaticRoots(node, isInFor) {
     if (node.type === 1) {
       if (node.static || node.once) {
@@ -11164,8 +11180,11 @@
       // are not just static text. Otherwise the cost of hoisting out will
       // outweigh the benefits and it's better off to just always render it fresh.
       if (
+        // 静态节点
         node.static &&
+        // 有孩子
         node.children.length &&
+        // 孩子有很多， 或者第一个孩子不是纯文本
         !(node.children.length === 1 && node.children[0].type === 3)
       ) {
         node.staticRoot = true;
@@ -11197,8 +11216,8 @@
       // text
       return true;
     }
-    return !!(
-      // 设置了 v-pre 指令， 表示不用解析
+    return !!// 设置了 v-pre 指令， 表示不用解析
+    (
       node.pre ||
       (!node.hasBindings && // no dynamic bindings ，没有动态绑定
       !node.if &&
@@ -11470,10 +11489,12 @@
   };
 
   function generate(ast, options) {
+    // options 是传入的一些判断函数或者是指令函数
     var state = new CodegenState(options);
-    var code = ast ? genElement(ast, state) : '_c("div")';
+    var code = ast ? genElement(ast, state) : '_c("div")'; // genElement 这是 ast 拼接成字符串的重点函数， 主要是处理各种节点， 并且拼接起来
     return {
-      render: "with(this){return " + code + "}",
+      render: "with(this){return " + code + "}", // with 就不多说了哈，就是为了给 render 绑定实例为上下文
+      // 专门用于存放静态根节点的
       staticRenderFns: state.staticRenderFns
     };
   }
@@ -11503,6 +11524,7 @@
       } else {
         var data;
         if (!el.plain || (el.pre && state.maybeComponent(el))) {
+          // 处理其他类型的节点
           data = genData$2(el, state);
         }
 
@@ -11581,10 +11603,11 @@
   }
 
   function genIfConditions(conditions, state, altGen, altEmpty) {
+    // 当没有条件的时候， 就返回_e, 意思是空节点
     if (!conditions.length) {
       return altEmpty || "_e()";
     }
-
+    // 遍历一遍之后， 就把条件剔除
     var condition = conditions.shift();
     if (condition.exp) {
       return (
@@ -11658,7 +11681,9 @@
 
     // directives first.
     // directives may mutate the el's other properties before they are generated.
+    // 先解析指令
     var dirs = genDirectives(el, state);
+    // 拼接上解析得到的指令字符串
     if (dirs) {
       data += dirs + ",";
     }
